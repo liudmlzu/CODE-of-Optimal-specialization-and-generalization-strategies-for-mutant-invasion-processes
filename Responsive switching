@@ -29,7 +29,7 @@ for mu_idx = 1:length(mu_values)
         
         % Multiple simulations
         for sim = 1:num_simulations
-            % ✅ Initialize population: one A-type, the rest are B-type (0)
+            % Initialize population: one A-type, the rest are B-type (0)
             population = zeros(1, N);  % All B-type (0)
             mutant_idx = randi(N);     % Randomly select one individual as the A-type mutant
             if rand < 0.5  % Random selection between specialist A and generalist A
