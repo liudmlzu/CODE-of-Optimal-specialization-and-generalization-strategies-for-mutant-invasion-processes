@@ -1,0 +1,130 @@
+%% Parameter Settings
+N = 100;               % Population size
+p_plus = 1/N;          % Probability of switching from environment 1 to 2
+p_minus = 1/(N);       % Probability of switching from environment 2 to 1
+beta = 1;              % Selection intensity
+num_steps = 1000;      % Number of simulation steps
+num_simulations = 1000; % Number of simulations for each parameter set
+env_update_interval = 1;
+
+% Parameter ranges: x-axis is the mean μ, y-axis is the standard deviation σ
+mu_values = linspace(-6, 6, 100);     % Range of 100 μ values
+sigma_values = linspace(0, 10, 100);  % Range of 100 σ values
+
+% Pre-allocate matrix for storing fixation probability (rows: σ, columns: μ)
+fixation_prob_matrix = zeros(length(sigma_values), length(mu_values));
+
+% Calculate steady-state probabilities for environment states (optional)
+p1 = p_minus / (p_plus + p_minus);
+p2 = p_plus / (p_plus + p_minus);
+
+%% Parameter Sweep Loop
+for mu_idx = 1:length(mu_values)
+    mu = mu_values(mu_idx);
+    fprintf('\nProcessing μ=%.2f (%d/%d)', mu, mu_idx, length(mu_values));
+    
+    for sigma_idx = 1:length(sigma_values)
+        sigma = sigma_values(sigma_idx);
+        fixation_count = 0;  % Counter for fixation of type A
+        
+        % Multiple simulations
+        for sim = 1:num_simulations
+            % ✅ Initialize population: one A-type, the rest are B-type (0)
+            population = zeros(1, N);  % All B-type (0)
+            mutant_idx = randi(N);     % Randomly select one individual as the A-type mutant
+            if rand < 0.5  % Random selection between specialist A and generalist A
+                population(mutant_idx) = 1; % Specialist A
+            else
+                population(mutant_idx) = 2; % Generalist A
+            end
+
+            % Initialize environment (1 or 2)
+            environment = randi([1, 2]);
+
+            for step = 1:num_steps
+                if all(population ~= 0)
+                    fixation_count = fixation_count + 1;
+                    break;
+                end
+
+                idx = randperm(N, 2);  % Randomly select two individuals
+                i = idx(1);
+                j = idx(2);
+
+                a1 = mu - sigma * sqrt(p2 / p1);  % Payoff for specialist A in environment 2
+                a2 = mu + sigma * sqrt(p1 / p2);  % Payoff for specialist A in environment 1
+
+                % Individual i's payoff
+                if population(i) == 1
+                    pi_i = (environment == 1) * a1 + (environment == 2) * a2;
+                elseif population(i) == 2
+                    pi_i = 0.2 * mu;
+                else
+                    pi_i = 0;
+                end
+
+                % Individual j's payoff
+                if population(j) == 1
+                    pi_j = (environment == 1) * a1 + (environment == 2) * a2;
+                elseif population(j) == 2
+                    pi_j = 0.2 * mu;
+                else
+                    pi_j = 0;
+                end
+
+                delta_pi = pi_i - pi_j;
+                g_plus = 1 / (1 + exp(-beta * delta_pi));  % Probability of individual i winning
+
+                % Competition update (the winner copies the type of the loser)
+                if rand < g_plus
+                    population(j) = population(i);
+                else
+                    population(i) = population(j);
+                end
+
+                % Update environment every certain number of steps and synchronize hedging strategy
+                if mod(step, env_update_interval) == 0
+                    if environment == 1 && rand < p_plus
+                        environment = 2;
+                    elseif environment == 2 && rand < p_minus
+                        environment = 1;
+                    end
+                    
+                    % Risk hedging strategy: Adjust all A-type individuals' state based on the current environment
+                    for k = 1:N
+                        if population(k) ~= 0  % If the individual is of type A
+                            if environment == 2
+                                population(k) = 1;  % Specialist in environment 2
+                            else % environment == 1
+                                population(k) = 2;  % Generalist in environment 1
+                            end
+                        end
+                    end
+                end
+            end  % End of simulation steps
+        end  % End of multiple simulations
+        
+        % Record the fixation probability for the current (mu, sigma) combination
+        fixation_prob_matrix(sigma_idx, mu_idx) = fixation_count / num_simulations;
+    end
+end
+
+%% Plot Heatmap
+figure('Position', [100, 100, 800, 600]);
+imagesc(mu_values, sigma_values, fixation_prob_matrix);  % Plot the fixation probability as a heatmap
+xlabel('\mu', 'FontSize', 26, 'FontName', 'Times New Roman', 'FontWeight', 'bold');
+ylabel('\sigma', 'FontSize', 26, 'FontName', 'Times New Roman', 'FontWeight', 'bold');
+set(gca, 'YDir', 'normal');  % Adjust y-axis direction to be normal
+set(gca, 'FontSize', 20, 'FontName', 'Times New Roman', 'FontWeight', 'bold');
+box on;
+
+% ✅ Use reversed jet colormap
+colormap(flipud(jet)); 
+caxis([0 1]);  % Explicitly set color scale range
+
+% ✅ Set colorbar label
+cb = colorbar;
+cb.Label.String = 'Fixation probability \phi';
+cb.Label.FontSize = 22;
+cb.Label.FontWeight = 'bold';
+cb.Label.FontName = 'Times New Roman';
